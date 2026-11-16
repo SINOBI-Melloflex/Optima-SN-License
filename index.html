@@ -1,0 +1,110 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>OptimaSN License Manager</title>
+<style>
+body{margin:0;font:15px/1.5 "Segoe UI",Arial,sans-serif;background:#0b1220;color:#e6edf7}
+.w{max-width:1000px;margin:0 auto;padding:20px}h1{font-size:22px}
+.c{background:#121c30;border:1px solid #243452;border-radius:12px;padding:16px;margin:14px 0}
+input,select,button{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid #2c3f66;background:#0b1424;color:#e6edf7}
+button{background:#1d5fd1;border-color:#1d5fd1;cursor:pointer}button.g{background:#1a2740;border-color:#2c3f66}button.r{background:#8a2430;border-color:#8a2430}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.sc{overflow-x:auto}
+table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #243452;text-align:left;font-size:14px;vertical-align:top}
+.ok{color:#34e0a1}.bad{color:#ff6b7a}.mut{color:#8fa3c7;font-size:13px}
+.key{font:20px Consolas,monospace;background:#0b1424;padding:12px;border-radius:8px;border:1px dashed #34e0a1;word-break:break-all;margin:8px 0}
+</style></head><body><div class="w">
+<h1>OptimaSN License Manager</h1>
+<div id="lg" class="c">
+  <p>Paste your GitHub token (only for the license repository). It stays in this browser tab and is forgotten when you close it.</p>
+  <div class="row"><input id="tk" type="password" placeholder="github_pat_..." style="flex:1;min-width:240px"><button id="go">Log in</button></div>
+  <p id="lerr" class="bad"></p>
+</div>
+<div id="ap" hidden>
+  <div class="c"><b>New license</b>
+    <div class="row" style="margin-top:10px">
+      <input id="nl" placeholder="Label (e.g. Shop name)" style="flex:1;min-width:180px">
+      <select id="np"><option value="1">1 month</option><option value="2">2 months</option><option value="3">3 months</option><option value="6">6 months</option><option value="12">1 year</option><option value="18">1.5 years</option><option value="24">2 years</option><option value="life">Lifetime</option><option value="days">Custom days...</option></select>
+      <input id="nd" type="number" min="1" placeholder="days" style="width:90px;display:none">
+      <input id="nm" placeholder="PC ID (optional)" style="width:170px">
+      <button id="mk">Create</button>
+    </div>
+    <p class="mut">Do not put private details in the label: this repository is public. Leave PC ID empty to allow any computer. To lock a key to one computer, paste the PC ID shown on that computer's license screen.</p>
+    <div id="nk" hidden><b class="ok">New key. Copy it now. It can never be shown again.</b><div class="key" id="kv"></div><button id="cp" class="g">Copy key</button></div>
+  </div>
+  <div class="c"><div class="row" style="justify-content:space-between"><b>Licenses</b><button id="rl" class="g">Reload</button></div>
+    <div class="sc"><table><thead><tr><th>Label</th><th>ID</th><th>Status</th><th>Expires</th><th>PC</th><th>Actions</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <p class="mut">Changes reach customers within about 5 to 10 minutes.</p>
+  </div>
+  <p id="msg" class="mut"></p>
+</div>
+<script>
+const OWNER='SINOBI-Melloflex',REPO='Optima-SN-License';
+const API='https://api.github.com/repos/'+OWNER+'/'+REPO+'/contents/licenses.json';
+let tok=sessionStorage.getItem('t')||'',sha='',data={v:1,licenses:[]};
+const $=id=>document.getElementById(id);
+const b64e=s=>btoa(unescape(encodeURIComponent(s))),b64d=s=>decodeURIComponent(escape(atob(s.replace(/\s/g,''))));
+const hd=()=>({'Authorization':'Bearer '+tok,'Accept':'application/vnd.github+json'});
+const today=()=>new Date().toISOString().slice(0,10);
+function addM(d,m){const x=new Date(d+'T00:00:00Z');x.setUTCMonth(x.getUTCMonth()+m);return x.toISOString().slice(0,10);}
+function addD(d,n){const x=new Date(d+'T00:00:00Z');x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10);}
+function say(t,bad){$('msg').textContent=t;$('msg').className=bad?'bad':'mut';}
+async function load(){
+  const r=await fetch(API+'?t='+Date.now(),{headers:hd(),cache:'no-store'});
+  if(!r.ok)throw new Error(r.status>=400&&r.status<500?'This token is not accepted for the license repository.':'GitHub error '+r.status);
+  const j=await r.json();sha=j.sha;data=JSON.parse(b64d(j.content));if(!Array.isArray(data.licenses))data.licenses=[];
+}
+async function save(m){
+  data.updated=new Date().toISOString();
+  const r=await fetch(API,{method:'PUT',headers:hd(),body:JSON.stringify({message:m,content:b64e(JSON.stringify(data,null,2)),sha:sha})});
+  if(!r.ok){await load().catch(function(){});draw();throw new Error('Save failed ('+r.status+'). The list was reloaded. Please try again.');}
+  sha=(await r.json()).content.sha;
+}
+async function hash(k){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('OPTIMASN|'+k));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');}
+function newKey(){const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',b=new Uint8Array(20);crypto.getRandomValues(b);let s='';b.forEach(function(x){s+=A[x&31];});return s;}
+function fmt(k){return k.match(/.{5}/g).join('-');}
+function stat(l){
+  if(l.status==='revoked')return['Disabled','bad'];
+  if(!l.expires)return['Lifetime','ok'];
+  const d=Math.ceil((Date.parse(l.expires+'T23:59:59Z')-Date.now())/864e5);
+  return d<0?['Expired','bad']:['Active, '+d+' days left','ok'];
+}
+function draw(){
+  const tb=$('tb');tb.innerHTML='';
+  data.licenses.slice().reverse().forEach(function(l){
+    const tr=document.createElement('tr'),s=stat(l);
+    [l.label||'',l.id,s[0],l.expires||'never',l.machine||'any'].forEach(function(v,i){const td=document.createElement('td');td.textContent=v;if(i===2)td.className=s[1];tr.appendChild(td);});
+    const td=document.createElement('td');
+    [['ext1','+1 month','g'],['ext12','+1 year','g'],['life','Lifetime','g'],['pc','PC ID','g'],['tog',l.status==='revoked'?'Enable':'Disable','r'],['del','Delete','r']].forEach(function(a){
+      const b=document.createElement('button');b.textContent=a[1];b.className=a[2];b.style.margin='2px';b.dataset.a=a[0];b.dataset.i=l.id;td.appendChild(b);
+    });
+    tr.appendChild(td);tb.appendChild(tr);
+  });
+}
+async function act(a,id){
+  const l=data.licenses.find(function(x){return x.id===id;});if(!l)return;
+  const base=function(){const t=today();return(l.expires&&l.expires>t)?l.expires:t;};
+  if(a==='ext1'){l.expires=addM(base(),1);l.status='active';}
+  else if(a==='ext12'){l.expires=addM(base(),12);l.status='active';}
+  else if(a==='life'){l.expires=null;l.status='active';}
+  else if(a==='pc'){const v=prompt('PC ID (empty = any computer):',l.machine||'');if(v===null)return;l.machine=v.trim().toUpperCase()||null;}
+  else if(a==='tog'){l.status=l.status==='revoked'?'active':'revoked';}
+  else if(a==='del'){if(!confirm('Delete this license for good?'))return;data.licenses=data.licenses.filter(function(x){return x.id!==id;});}
+  try{say('Saving...');await save('license '+a+' '+id);draw();say('Saved.');}catch(e){say(e.message,true);}
+}
+async function start(){
+  try{await load();$('lg').hidden=true;$('ap').hidden=false;draw();}
+  catch(e){sessionStorage.removeItem('t');$('lerr').textContent=e.message;}
+}
+$('go').onclick=function(){tok=$('tk').value.trim();sessionStorage.setItem('t',tok);start();};
+$('rl').onclick=function(){load().then(draw).catch(function(e){say(e.message,true);});};
+$('np').onchange=function(){$('nd').style.display=$('np').value==='days'?'':'none';};
+$('tb').onclick=function(e){const a=e.target.dataset&&e.target.dataset.a;if(a)act(a,e.target.dataset.i);};
+$('cp').onclick=function(){navigator.clipboard.writeText($('kv').textContent);say('Key copied.');};
+$('mk').onclick=async function(){
+  const p=$('np').value,t=today();let ex=null;
+  if(p==='days'){const n=parseInt($('nd').value,10);if(!(n>0)){say('Enter the number of days.',true);return;}ex=addD(t,n);}
+  else if(p!=='life'){ex=addM(t,parseInt(p,10));}
+  const k=newKey(),rec={id:'L-'+Date.now().toString(36).toUpperCase(),h:await hash(k),label:$('nl').value.trim(),start:t,expires:ex,status:'active',machine:$('nm').value.trim().toUpperCase()||null};
+  data.licenses.push(rec);
+  try{say('Saving...');await save('new license '+rec.id);$('kv').textContent=fmt(k);$('nk').hidden=false;$('nl').value='';$('nm').value='';draw();say('Saved.');}
+  catch(e){data.licenses.pop();say(e.message,true);}
+};
+if(tok)start();
+</script></div></body></html>
