@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OptimaSN License Check</title>
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#070b16;color:#e6edf7;font:15px/1.6 "Segoe UI",Arial,sans-serif}
+.c{width:min(460px,92vw);background:#101a30;border:1px solid #243452;border-radius:14px;padding:26px}
+input{width:100%;box-sizing:border-box;padding:12px;border-radius:9px;border:1px solid #2c3f66;background:#0b1424;color:#fff;font:17px Consolas,monospace;margin:10px 0}
+button{padding:11px 20px;border-radius:9px;border:0;background:#1d5fd1;color:#fff;font:inherit;cursor:pointer}.ok{color:#34e0a1}.bad{color:#ff6b7a}</style></head>
+<body><div class="c"><h2 style="margin:0 0 6px">License check</h2><p style="color:#9db0d3">Type your license key to see if it is active.</p>
+<input id="k" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off"><button id="b">Check</button><p id="r"></p></div>
+<script>
+document.getElementById('b').onclick=async function(){
+ var r=document.getElementById('r');r.className='';r.textContent='Checking...';
+ try{
+  var n=document.getElementById('k').value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(n.length<16){r.className='bad';r.textContent='This key is not valid.';return;}
+  var d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('OPTIMASN|'+n));
+  var h=Array.from(new Uint8Array(d)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');
+  var j=await (await fetch('../licenses.json?t='+Date.now(),{cache:'no-store'})).json();
+  var l=(j.licenses||[]).find(function(x){return x.h===h;});
+  if(!l){r.className='bad';r.textContent='This key is not valid.';return;}
+  if(l.status==='revoked'){r.className='bad';r.textContent='This license has been disabled.';return;}
+  if(!l.expires){r.className='ok';r.textContent='Active (lifetime).';return;}
+  var days=Math.ceil((Date.parse(l.expires+'T23:59:59Z')-Date.now())/864e5);
+  if(days<0){r.className='bad';r.textContent='Expired on '+l.expires+'.';return;}
+  r.className='ok';r.textContent='Active until '+l.expires+' ('+days+' days left).';
+ }catch(e){r.className='bad';r.textContent='Could not check now. Try again later.';}
+};
+</script></body></html>
