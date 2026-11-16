@@ -906,10 +906,10 @@
       "h": "1d2b79b941ece19e90566d35963a40dffdbb561f97a919fb3f3e4d6c278490df",
       "label": "Test key (this PC)",
       "start": "2026-11-16",
-      "expires": "2027-12-16",
+      "expires": null,
       "status": "active",
       "machine": null
     }
   ],
-  "updated": "2026-11-16T21:55:13.850Z"
+  "updated": "2026-11-16T21:55:21.763Z"
 }
