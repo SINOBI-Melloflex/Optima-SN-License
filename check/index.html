@@ -1,26 +1,33 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OptimaSN License Check</title>
-<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#070b16;color:#e6edf7;font:15px/1.6 "Segoe UI",Arial,sans-serif}
-.c{width:min(460px,92vw);background:#101a30;border:1px solid #243452;border-radius:14px;padding:26px}
-input{width:100%;box-sizing:border-box;padding:12px;border-radius:9px;border:1px solid #2c3f66;background:#0b1424;color:#fff;font:17px Consolas,monospace;margin:10px 0}
-button{padding:11px 20px;border-radius:9px;border:0;background:#1d5fd1;color:#fff;font:inherit;cursor:pointer}.ok{color:#34e0a1}.bad{color:#ff6b7a}</style></head>
-<body><div class="c"><h2 style="margin:0 0 6px">License check</h2><p style="color:#9db0d3">Type your license key to see if it is active.</p>
-<input id="k" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off"><button id="b">Check</button><p id="r"></p></div>
+<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;color:#e8eefb;font:15px/1.6 "Segoe UI",system-ui,Arial,sans-serif;background:radial-gradient(900px 500px at 10% -10%,#16264d 0,transparent 60%),radial-gradient(700px 400px at 100% 0,#0d3947 0,transparent 55%),#070b16}
+.c{width:min(470px,92vw);background:rgba(15,24,48,.85);border:1px solid #23304f;border-radius:18px;padding:28px}
+.logo{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#5b8cff,#22d3ee);display:grid;place-items:center;overflow:hidden;font-weight:800;font-size:24px;margin-bottom:14px}
+.logo img{width:100%;height:100%;object-fit:contain;background:#fff;padding:3px}[hidden]{display:none!important}
+h2{margin:0 0 4px}p{color:#8ea0c4;margin:0 0 12px}
+input{width:100%;padding:13px;border-radius:11px;border:1px solid #2a3b60;background:#0a1223;color:#fff;font:17px Consolas,monospace;letter-spacing:1px;margin:6px 0 12px;outline:none}
+button{width:100%;padding:12px;border-radius:11px;border:0;background:linear-gradient(180deg,#3a74ff,#1f56d8);color:#fff;font:inherit;cursor:pointer}
+#r{margin-top:16px;padding:14px;border-radius:12px;border:1px solid;display:none}#r.ok{display:block;color:#34e0a1;border-color:rgba(52,224,161,.4);background:rgba(52,224,161,.08)}
+#r.bad{display:block;color:#ff6b7a;border-color:rgba(255,107,122,.4);background:rgba(255,107,122,.08)}#r.warn{display:block;color:#fbbf24;border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.08)}</style></head>
+<body><div class="c"><div class="logo"><span id="lt">O</span><img src="../logo.png" alt="" hidden onload="this.hidden=false;document.getElementById('lt').hidden=true" onerror="this.remove()"></div>
+<h2>OptimaSN License Check</h2><p>Type your license key to see its status.</p>
+<input id="k" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off"><button id="b">Check</button><div id="r"></div></div>
 <script>
 document.getElementById('b').onclick=async function(){
- var r=document.getElementById('r');r.className='';r.textContent='Checking...';
+ var r=document.getElementById('r');r.className='';r.textContent='';
+ function out(c,t){r.className=c;r.textContent=t;}
  try{
   var n=document.getElementById('k').value.toUpperCase().replace(/[^A-Z0-9]/g,'');
-  if(n.length<16){r.className='bad';r.textContent='This key is not valid.';return;}
+  if(n.length<16){out('bad','This key is not valid.');return;}
   var d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('OPTIMASN|'+n));
   var h=Array.from(new Uint8Array(d)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');
   var j=await (await fetch('../licenses.json?t='+Date.now(),{cache:'no-store'})).json();
   var l=(j.licenses||[]).find(function(x){return x.h===h;});
-  if(!l){r.className='bad';r.textContent='This key is not valid.';return;}
-  if(l.status==='revoked'){r.className='bad';r.textContent='This license has been disabled.';return;}
-  if(!l.expires){r.className='ok';r.textContent='Active (lifetime).';return;}
+  if(!l){out('bad','This key is not valid.');return;}
+  if(l.status==='revoked'){out('bad','This license has been disabled.');return;}
+  if(!l.expires){out('ok','Active. Lifetime license.');return;}
   var days=Math.ceil((Date.parse(l.expires+'T23:59:59Z')-Date.now())/864e5);
-  if(days<0){r.className='bad';r.textContent='Expired on '+l.expires+'.';return;}
-  r.className='ok';r.textContent='Active until '+l.expires+' ('+days+' days left).';
- }catch(e){r.className='bad';r.textContent='Could not check now. Try again later.';}
+  if(days<0){out('bad','Expired on '+l.expires+'.');return;}
+  out(days<=7?'warn':'ok','Active until '+l.expires+' ('+days+' days left).');
+ }catch(e){out('bad','Could not check now. Try again later.');}
 };
 </script></body></html>
